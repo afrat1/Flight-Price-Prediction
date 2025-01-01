@@ -2,7 +2,7 @@
 .ipynb_checkpoints/
 
 # Ignore virtual documents
-_virtual_documents/
+.virtual_documents/
 
 # Ignore Anaconda projects
 anaconda_projects/
