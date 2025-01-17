@@ -5,8 +5,11 @@ import math
 from xgboost import XGBRegressor
 
 # Load and preprocess dataset
-file_path = './dataset/Clean_Dataset.csv'
+file_path = './dataset/Clean_Dataset_with_20k_Outliers.csv'
 df = pd.read_csv(file_path)
+
+# Take 20% random sample of the entire dataset
+df = df.sample(frac=1, random_state=42)
 
 # Drop irrelevant columns
 df = df.drop('Unnamed: 0', axis=1)
