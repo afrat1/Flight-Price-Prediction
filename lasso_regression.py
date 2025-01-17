@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import math
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def train_test_split(X, y, test_size=0.2, random_state=None):
     """Custom implementation of train_test_split"""
@@ -144,7 +146,7 @@ X, y = df.drop('price', axis=1), df.price
 
 # Randomly sample 20% of the data
 random_state = 42
-sample_size = 1
+sample_size = 0.2
 indices = np.random.RandomState(random_state).permutation(len(X))
 sample_size = int(len(X) * sample_size)
 sample_indices = indices[:sample_size]
@@ -177,7 +179,8 @@ for alpha in alphas:
         'alpha': alpha,
         'train_r2': train_r2,
         'test_r2': test_r2,
-        'coefficient_sum': np.sum(np.abs(model.coef_))  # Sum of absolute coefficients
+        'coefficient_sum': np.sum(np.abs(model.coef_)),
+        'model': model
     })
     
     print(f"\nAlpha: {alpha}")
@@ -194,26 +197,113 @@ print(f"Best Test R2: {best_result['test_r2']:.4f}")
 try:
     import matplotlib.pyplot as plt
     
-    plt.figure(figsize=(12, 5))
+    plt.figure(figsize=(20, 15))
     
-    plt.subplot(1, 2, 1)
+    # 1. Alpha vs R² Scores
+    plt.subplot(3, 2, 1)
     plt.semilogx([r['alpha'] for r in results], 
-                 [r['train_r2'] for r in results], 'b.-', label='Train R2')
+                 [r['train_r2'] for r in results], 'b.-', label='Train R²')
     plt.semilogx([r['alpha'] for r in results], 
-                 [r['test_r2'] for r in results], 'r.-', label='Test R2')
+                 [r['test_r2'] for r in results], 'r.-', label='Test R²')
     plt.xlabel('Alpha (log scale)')
-    plt.ylabel('R2 Score')
+    plt.ylabel('R² Score')
+    plt.title('Model Performance across Different Alphas')
     plt.legend()
     plt.grid(True)
     
-    plt.subplot(1, 2, 2)
-    plt.semilogx([r['alpha'] for r in results], 
-                 [r['coefficient_sum'] for r in results], 'g.-')
-    plt.xlabel('Alpha (log scale)')
-    plt.ylabel('Total Coefficient Magnitude')
+    # 2. Predicted vs Actual Values
+    plt.subplot(3, 2, 2)
+    plt.scatter(y_test, y_test_pred, alpha=0.5)
+    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+    plt.xlabel('Actual Price')
+    plt.ylabel('Predicted Price')
+    plt.title('Predicted vs Actual Values')
     plt.grid(True)
     
+    # 3. Feature Importance
+    plt.subplot(3, 2, 3)
+    feature_importance = pd.DataFrame({
+        'feature': X.columns,
+        'coefficient': abs(best_result['coefficient_sum'])
+    }).sort_values('coefficient', ascending=True)
+    
+    # Plot top 15 most important features
+    top_n = 15
+    plt.barh(range(top_n), feature_importance['coefficient'][-top_n:])
+    plt.yticks(range(top_n), feature_importance['feature'][-top_n:])
+    plt.xlabel('Absolute Coefficient Value')
+    plt.title(f'Top {top_n} Most Important Features')
+    
+    # 4. Residuals Distribution
+    plt.subplot(3, 2, 4)
+    residuals = y_test - y_test_pred
+    sns.histplot(residuals, kde=True)
+    plt.xlabel('Residual Value')
+    plt.ylabel('Count')
+    plt.title('Distribution of Residuals')
+    plt.grid(True)
+    
+    # 5. Residuals vs Predicted Values
+    plt.subplot(3, 2, 5)
+    plt.scatter(y_test_pred, residuals, alpha=0.5)
+    plt.axhline(y=0, color='r', linestyle='--')
+    plt.xlabel('Predicted Price')
+    plt.ylabel('Residuals')
+    plt.title('Residuals vs Predicted Values')
+    plt.grid(True)
+    
+    # 6. Coefficient Path
+    plt.subplot(3, 2, 6)
+    coef_path = []
+    for r in results:
+        if hasattr(r['model'], 'coef_'):
+            coef_path.append(r['model'].coef_)
+    coef_path = np.array(coef_path)
+
+    for coef_idx in range(min(10, X.shape[1])):  # Plot first 10 features
+        plt.semilogx(alphas, coef_path[:, coef_idx], label=X.columns[coef_idx])
+    plt.xlabel('Alpha (log scale)')
+    plt.ylabel('Coefficient Value')
+    plt.title('Coefficient Path for Top Features')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True)
+
     plt.tight_layout()
     plt.show()
 except ImportError:
     print("Matplotlib is not installed. Could not create visualization.") 
+
+# Additional performance metrics visualization
+plt.figure(figsize=(12, 6))
+performance_metrics = pd.DataFrame({
+    'alpha': alphas,
+    'train_r2': [r['train_r2'] for r in results],
+    'test_r2': [r['test_r2'] for r in results],
+    'coef_sum': [r['coefficient_sum'] for r in results]
+})
+
+plt.subplot(1, 2, 1)
+sns.boxplot(data=pd.DataFrame(residuals, columns=['residuals']))
+plt.title('Residuals Distribution')
+plt.grid(True)
+
+plt.subplot(1, 2, 2)
+price_ranges = pd.qcut(y_test, q=5, labels=['Very Low', 'Low', 'Medium', 'High', 'Very High'])
+mean_abs_error = pd.Series(abs(residuals)).groupby(price_ranges).mean()
+plt.bar(range(len(mean_abs_error)), mean_abs_error)
+plt.xticks(range(len(mean_abs_error)), mean_abs_error.index, rotation=45)
+plt.xlabel('Price Range')
+plt.ylabel('Mean Absolute Error')
+plt.title('Prediction Error by Price Range')
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+# Print summary statistics
+print("\nModel Performance Summary:")
+print(f"Best Alpha: {best_result['alpha']}")
+print(f"Best Test R²: {best_result['test_r2']:.4f}")
+print(f"Mean Absolute Error: {np.mean(abs(residuals)):.2f}")
+print(f"Root Mean Squared Error: {np.sqrt(mean_squared_error(y_test, y_test_pred)):.2f}")
+print(f"Mean Relative Error: {np.mean(abs(residuals) / y_test * 100):.2f}%") 

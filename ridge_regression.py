@@ -140,7 +140,7 @@ X, y = df.drop('price', axis=1), df.price
 
 # Randomly sample 20% of the data
 random_state = 42
-sample_size = 1
+sample_size = 0.4
 indices = np.random.RandomState(random_state).permutation(len(X))
 sample_size = int(len(X) * sample_size)
 sample_indices = indices[:sample_size]
@@ -213,3 +213,88 @@ try:
     plt.show()
 except ImportError:
     print("Matplotlib yüklü değil. Grafik oluşturulamadı.")
+
+# After getting the best model results, add these visualizations
+# Get predictions using the best alpha model
+best_model = CustomRidgeRegression(alpha=best_result['alpha'])
+best_model.fit(X_train, y_train)
+y_train_pred = best_model.predict(X_train)
+y_test_pred = best_model.predict(X_test)
+
+# Create visualizations
+plt.figure(figsize=(20, 12))
+
+# 1. Predicted vs Actual Values
+plt.subplot(2, 3, 1)
+plt.scatter(y_test, y_test_pred, alpha=0.5)
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+plt.xlabel('Actual Price')
+plt.ylabel('Predicted Price')
+plt.title('Predicted vs Actual Values')
+plt.grid(True)
+
+# 2. Residuals Plot
+plt.subplot(2, 3, 2)
+residuals = y_test - y_test_pred
+plt.scatter(y_test_pred, residuals, alpha=0.5)
+plt.axhline(y=0, color='r', linestyle='--')
+plt.xlabel('Predicted Price')
+plt.ylabel('Residuals')
+plt.title('Residuals vs Predicted Values')
+plt.grid(True)
+
+# 3. Residuals Distribution
+plt.subplot(2, 3, 3)
+plt.hist(residuals, bins=50, edgecolor='black')
+plt.xlabel('Residual Value')
+plt.ylabel('Frequency')
+plt.title('Distribution of Residuals')
+plt.grid(True)
+
+# 4. Feature Importance
+plt.subplot(2, 3, 4)
+feature_importance = pd.DataFrame({
+    'feature': X.columns,
+    'coefficient': abs(best_model.coef_)
+}).sort_values('coefficient', ascending=True)
+
+# Plot top 15 most important features
+top_n = 15
+plt.barh(range(top_n), feature_importance['coefficient'][-top_n:])
+plt.yticks(range(top_n), feature_importance['feature'][-top_n:])
+plt.xlabel('Absolute Coefficient Value')
+plt.title(f'Top {top_n} Most Important Features')
+
+# 5. Price Range Analysis
+plt.subplot(2, 3, 5)
+price_ranges = pd.qcut(y_test, q=5, labels=['Very Low', 'Low', 'Medium', 'High', 'Very High'])
+mean_abs_error = pd.Series(abs(residuals)).groupby(price_ranges).mean()
+
+plt.bar(range(len(mean_abs_error)), mean_abs_error)
+plt.xticks(range(len(mean_abs_error)), mean_abs_error.index, rotation=45)
+plt.xlabel('Price Range')
+plt.ylabel('Mean Absolute Error')
+plt.title('Prediction Error by Price Range')
+plt.grid(True)
+
+# 6. Training vs Testing Performance
+plt.subplot(2, 3, 6)
+train_residuals = y_train - y_train_pred
+plt.hist(train_residuals, bins=50, alpha=0.5, label='Training', edgecolor='black')
+plt.hist(residuals, bins=50, alpha=0.5, label='Testing', edgecolor='black')
+plt.xlabel('Prediction Error')
+plt.ylabel('Frequency')
+plt.title('Training vs Testing Error Distribution')
+plt.legend()
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+# Additional summary statistics
+print("\nModel Performance Summary:")
+print(f"Best Alpha: {best_result['alpha']}")
+print(f"Mean Absolute Error: {np.mean(abs(residuals)):.2f}")
+print(f"Root Mean Squared Error: {np.sqrt(mean_squared_error(y_test, y_test_pred)):.2f}")
+print(f"R² Score: {r2_score(y_test, y_test_pred):.4f}")
+print(f"Mean Relative Error: {np.mean(abs(residuals) / y_test * 100):.2f}%")

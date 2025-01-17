@@ -156,7 +156,7 @@ X, y = df.drop('price', axis=1), df.price
 
 # Randomly sample 20% of the data
 random_state = 42
-sample_size = 1
+sample_size = 0.2
 indices = np.random.RandomState(random_state).permutation(len(X))
 sample_size = int(len(X) * sample_size)
 sample_indices = indices[:sample_size]
@@ -210,11 +210,14 @@ print(f"Best Test R2: {best_result['test_r2']:.4f}")
 # Visualization
 try:
     import matplotlib.pyplot as plt
+    import seaborn as sns
     
-    plt.figure(figsize=(15, 5))
+    # Create a figure with 5 subplots (2 rows, 3 columns)
+    plt.figure(figsize=(20, 12))
     
-    # Plot R2 scores for different alphas and l1_ratios
-    plt.subplot(1, 3, 1)
+    # Original 3 plots (keep them in the first row)
+    # Plot 1: R2 scores for different alphas and l1_ratios
+    plt.subplot(2, 3, 1)
     for l1_ratio in l1_ratios:
         current_results = [r for r in results if r['l1_ratio'] == l1_ratio]
         plt.semilogx([r['alpha'] for r in current_results],
@@ -222,11 +225,12 @@ try:
                      '.-', label=f'L1 ratio = {l1_ratio}')
     plt.xlabel('Alpha (log scale)')
     plt.ylabel('Test R2 Score')
+    plt.title('Model Performance across Parameters')
     plt.legend()
     plt.grid(True)
     
-    # Plot coefficient magnitudes
-    plt.subplot(1, 3, 2)
+    # Plot 2: Coefficient magnitudes
+    plt.subplot(2, 3, 2)
     for l1_ratio in l1_ratios:
         current_results = [r for r in results if r['l1_ratio'] == l1_ratio]
         plt.semilogx([r['alpha'] for r in current_results],
@@ -234,11 +238,12 @@ try:
                      '.-', label=f'L1 ratio = {l1_ratio}')
     plt.xlabel('Alpha (log scale)')
     plt.ylabel('Total Coefficient Magnitude')
+    plt.title('Feature Coefficient Magnitudes')
     plt.legend()
     plt.grid(True)
     
-    # Plot train vs test R2
-    plt.subplot(1, 3, 3)
+    # Plot 3: Train vs test R2
+    plt.subplot(2, 3, 3)
     best_l1_ratio = best_result['l1_ratio']
     best_results = [r for r in results if r['l1_ratio'] == best_l1_ratio]
     plt.semilogx([r['alpha'] for r in best_results],
@@ -249,11 +254,50 @@ try:
                  'r.-', label='Test R2')
     plt.xlabel('Alpha (log scale)')
     plt.ylabel('R2 Score')
-    plt.title(f'Best L1 Ratio: {best_l1_ratio}')
+    plt.title(f'Train vs Test R2 (L1 Ratio: {best_l1_ratio})')
     plt.legend()
     plt.grid(True)
     
+    # New plots in the second row
+    # Plot 4: Predicted vs Actual Values
+    plt.subplot(2, 3, 4)
+    # Train best model with optimal parameters
+    best_model = CustomElasticNetRegression(alpha=best_result['alpha'], 
+                                          l1_ratio=best_result['l1_ratio'])
+    best_model.fit(X_train, y_train)
+    y_pred = best_model.predict(X_test)
+    
+    plt.scatter(y_test, y_pred, alpha=0.5)
+    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+    plt.xlabel('Actual Price')
+    plt.ylabel('Predicted Price')
+    plt.title('Predicted vs Actual Values')
+    plt.grid(True)
+    
+    # Plot 5: Feature Importance
+    plt.subplot(2, 3, 5)
+    feature_importance = pd.DataFrame({
+        'feature': X.columns,
+        'importance': np.abs(best_model.coef_)
+    }).sort_values('importance', ascending=True)
+    
+    # Plot top 15 most important features
+    top_n = 15
+    plt.barh(range(top_n), feature_importance['importance'][-top_n:])
+    plt.yticks(range(top_n), feature_importance['feature'][-top_n:])
+    plt.xlabel('Absolute Coefficient Value')
+    plt.title(f'Top {top_n} Feature Importance')
+    
+    # Plot 6: Residuals
+    plt.subplot(2, 3, 6)
+    residuals = y_test - y_pred
+    sns.histplot(residuals, kde=True)
+    plt.xlabel('Residual Value')
+    plt.ylabel('Count')
+    plt.title('Distribution of Residuals')
+    
     plt.tight_layout()
     plt.show()
+    
 except ImportError:
-    print("Matplotlib is not installed. Could not create visualization.") 
+    print("Matplotlib or seaborn is not installed. Could not create visualization.") 
