@@ -24,7 +24,15 @@ df = df.join(pd.get_dummies(df.departure_time, prefix='departure')).drop('depart
 # Split dataset into features and target
 X, y = df.drop('price', axis=1).values, df.price.values
 
-# Manual train-test split
+# Take 20% of the total dataset randomly
+random_indices = np.random.permutation(len(X))
+subset_size = int(len(X) *1)
+selected_indices = random_indices[:subset_size]
+
+X = X[selected_indices]
+y = y[selected_indices]
+
+# Manual train-test split (using 80-20 split on the reduced dataset)
 split_ratio = 0.8
 split_index = int(len(X) * split_ratio)
 X_train, X_test = X[:split_index], X[split_index:]
@@ -58,68 +66,87 @@ class SimpleGBR:
         return y_pred
 
 class DecisionTreeRegressor:
-    def __init__(self, max_depth=3):
+    def __init__(self, max_depth=3, min_samples_split=2):
         self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
         self.tree = None
 
     def fit(self, X, y):
-        self.tree = self._build_tree(X, y, depth=0)
+        self.n_features = X.shape[1]
+        self.tree = self._grow_tree(X, y, depth=0)
 
-    def predict(self, X):
-        return np.array([self._predict_sample(x, self.tree) for x in X])
+    def _grow_tree(self, X, y, depth):
+        n_samples, n_features = X.shape
+        
+        # Stopping criteria
+        if (depth >= self.max_depth or 
+            n_samples < self.min_samples_split or 
+            np.std(y) < 1e-6):  # Nearly pure node
+            return self._create_leaf(y)
 
-    def _build_tree(self, X, y, depth):
-        if depth == self.max_depth or len(set(y)) == 1:
-            return np.mean(y)
-        best_split = self._find_best_split(X, y)
-        if best_split is None:
-            return np.mean(y)
+        best_feature, best_threshold = self._find_best_split(X, y)
+        
+        if best_feature is None:  # No valid split found
+            return self._create_leaf(y)
+            
+        left_idxs = X[:, best_feature] <= best_threshold
+        right_idxs = ~left_idxs
+        
+        # Create child nodes
+        left_tree = self._grow_tree(X[left_idxs], y[left_idxs], depth + 1)
+        right_tree = self._grow_tree(X[right_idxs], y[right_idxs], depth + 1)
+        
+        return {'feature': best_feature,
+                'threshold': best_threshold,
+                'left': left_tree,
+                'right': right_tree}
 
-        feature, threshold = best_split
-        left_indices = X[:, feature] < threshold
-        right_indices = X[:, feature] >= threshold
-
-        return {
-            "feature": feature,
-            "threshold": threshold,
-            "left": self._build_tree(X[left_indices], y[left_indices], depth + 1),
-            "right": self._build_tree(X[right_indices], y[right_indices], depth + 1),
-        }
+    def _create_leaf(self, y):
+        return np.mean(y)
 
     def _find_best_split(self, X, y):
-        best_mse = float("inf")
-        best_split = None
-
-        for feature in range(X.shape[1]):
+        best_gain = -np.inf
+        best_feature = None
+        best_threshold = None
+        
+        for feature in range(self.n_features):
             thresholds = np.unique(X[:, feature])
+            
             for threshold in thresholds:
-                left_indices = X[:, feature] < threshold
-                right_indices = X[:, feature] >= threshold
+                gain = self._calculate_variance_reduction(X[:, feature], y, threshold)
+                
+                if gain > best_gain:
+                    best_gain = gain
+                    best_feature = feature
+                    best_threshold = threshold
+                    
+        return best_feature, best_threshold
 
-                if sum(left_indices) == 0 or sum(right_indices) == 0:
-                    continue
+    def _calculate_variance_reduction(self, X_column, y, threshold):
+        parent_var = np.var(y) * len(y)
+        
+        left_idxs = X_column <= threshold
+        right_idxs = ~left_idxs
+        
+        if np.sum(left_idxs) == 0 or np.sum(right_idxs) == 0:
+            return -np.inf
+        
+        left_var = np.var(y[left_idxs]) * np.sum(left_idxs)
+        right_var = np.var(y[right_idxs]) * np.sum(right_idxs)
+        
+        variance_reduction = parent_var - (left_var + right_var)
+        return variance_reduction
 
-                left_y, right_y = y[left_indices], y[right_indices]
-                mse = self._calculate_mse(left_y, right_y)
-
-                if mse < best_mse:
-                    best_mse = mse
-                    best_split = (feature, threshold)
-
-        return best_split
-
-    def _calculate_mse(self, left_y, right_y):
-        left_mse = np.var(left_y) * len(left_y)
-        right_mse = np.var(right_y) * len(right_y)
-        return (left_mse + right_mse) / (len(left_y) + len(right_y))
-
-    def _predict_sample(self, x, tree):
-        if isinstance(tree, dict):
-            if x[tree["feature"]] < tree["threshold"]:
-                return self._predict_sample(x, tree["left"])
-            else:
-                return self._predict_sample(x, tree["right"])
-        return tree
+    def predict(self, X):
+        return np.array([self._traverse_tree(x, self.tree) for x in X])
+    
+    def _traverse_tree(self, x, node):
+        if not isinstance(node, dict):
+            return node
+            
+        if x[node['feature']] <= node['threshold']:
+            return self._traverse_tree(x, node['left'])
+        return self._traverse_tree(x, node['right'])
 
 # Train and evaluate the model
 model = SimpleGBR(n_estimators=100, learning_rate=0.1, max_depth=3)
@@ -181,7 +208,7 @@ plt.show()
 # Additional plot for prediction error by price range
 plt.figure(figsize=(10, 6))
 price_ranges = pd.qcut(y_test, q=10)
-mean_errors = pd.DataFrame({'residuals': abs(residuals)}).groupby(price_ranges).mean()
+mean_errors = pd.DataFrame({'residuals': abs(residuals)}).groupby(price_ranges, observed=True).mean()
 plt.bar(range(len(mean_errors)), mean_errors['residuals'])
 plt.xlabel('Price Range (Deciles)')
 plt.ylabel('Mean Absolute Error')
