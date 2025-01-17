@@ -135,7 +135,7 @@ class CustomElasticNetRegression:
         return mse + l1_penalty + l2_penalty
 
 # Data loading and preprocessing
-file_path = './dataset/Clean_Dataset.csv'
+file_path = './dataset/Clean_Dataset_with_20k_Outliers.csv'
 
 df = pd.read_csv(file_path)
 
