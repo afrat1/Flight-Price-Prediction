@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import math
 from collections import defaultdict
+import matplotlib.pyplot as plt
 
 # Load and preprocess dataset
 file_path = './dataset/Clean_Dataset.csv'
@@ -136,3 +137,55 @@ print("R2:", r2)
 print("MAE:", mae)
 print("MSE:", mse)
 print("RMSE:", rmse)
+
+# Create visualization subplots
+plt.figure(figsize=(15, 10))
+
+# 1. Predicted vs Actual Values Scatter Plot
+plt.subplot(2, 2, 1)
+plt.scatter(y_test, y_pred, alpha=0.5)
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+plt.xlabel('Actual Price')
+plt.ylabel('Predicted Price')
+plt.title('Predicted vs Actual Values')
+plt.grid(True)
+
+# 2. Residuals Plot
+plt.subplot(2, 2, 2)
+residuals = y_test - y_pred
+plt.scatter(y_pred, residuals, alpha=0.5)
+plt.axhline(y=0, color='r', linestyle='--')
+plt.xlabel('Predicted Price')
+plt.ylabel('Residuals')
+plt.title('Residuals vs Predicted Values')
+plt.grid(True)
+
+# 3. Residuals Distribution
+plt.subplot(2, 2, 3)
+plt.hist(residuals, bins=50, edgecolor='black')
+plt.xlabel('Residual Value')
+plt.ylabel('Frequency')
+plt.title('Distribution of Residuals')
+plt.grid(True)
+
+# 4. Error Distribution Box Plot
+plt.subplot(2, 2, 4)
+plt.boxplot(residuals)
+plt.ylabel('Prediction Error')
+plt.title('Distribution of Prediction Errors')
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+# Additional plot for prediction error by price range
+plt.figure(figsize=(10, 6))
+price_ranges = pd.qcut(y_test, q=10)
+mean_errors = pd.DataFrame({'residuals': abs(residuals)}).groupby(price_ranges).mean()
+plt.bar(range(len(mean_errors)), mean_errors['residuals'])
+plt.xlabel('Price Range (Deciles)')
+plt.ylabel('Mean Absolute Error')
+plt.title('Prediction Error by Price Range')
+plt.xticks(range(len(mean_errors)), ['Low', '2', '3', '4', '5', '6', '7', '8', '9', 'High'], rotation=45)
+plt.grid(True)
+plt.show()
