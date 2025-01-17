@@ -9,7 +9,7 @@ file_path = './dataset/Clean_Dataset_with_20k_Outliers.csv'
 df = pd.read_csv(file_path)
 
 # Take 20% random sample of the entire dataset
-df = df.sample(frac=1, random_state=42)
+df = df.sample(frac=0.2, random_state=42)
 
 # Drop irrelevant columns
 df = df.drop('Unnamed: 0', axis=1)
@@ -50,14 +50,20 @@ plt.show()
 # Create visualization subplots
 plt.figure(figsize=(15, 10))
 
-# 1. Predicted vs Actual Values Scatter Plot
+# 1. Predicted vs Actual Values Hexbin Plot
 plt.subplot(2, 2, 1)
-plt.scatter(y_test, y_pred, alpha=0.5)
-plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+hb = plt.hexbin(y_test, y_pred, 
+                gridsize=30,           # Altıgen grid boyutu
+                cmap='YlOrRd',         # Sarı-Turuncu-Kırmızı renk şeması
+                mincnt=1)              # Minimum sayım
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 
+         'b--', lw=2, label='Perfect Prediction')
+plt.colorbar(hb, label='Number of Points')
 plt.xlabel('Actual Price')
 plt.ylabel('Predicted Price')
-plt.title('Predicted vs Actual Values')
-plt.grid(True)
+plt.title('Predicted vs Actual Values\nColor indicates density of points')
+plt.grid(True, alpha=0.3)
+plt.legend()
 
 # 2. Residuals Plot
 plt.subplot(2, 2, 2)

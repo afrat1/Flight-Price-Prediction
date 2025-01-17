@@ -5,7 +5,7 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 
 # Load and preprocess dataset
-file_path = './dataset/Clean_Dataset.csv'
+file_path = './dataset/Clean_Dataset_with_20k_Outliers.csv'
 df = pd.read_csv(file_path)
 
 # Drop irrelevant columns
@@ -26,7 +26,7 @@ X, y = df.drop('price', axis=1).values, df.price.values
 
 # Take 20% of the total dataset randomly
 random_indices = np.random.permutation(len(X))
-subset_size = int(len(X) *1)
+subset_size = int(len(X) * 0.02)
 selected_indices = random_indices[:subset_size]
 
 X = X[selected_indices]
@@ -168,14 +168,20 @@ print("RMSE:", rmse)
 # Create visualization subplots
 plt.figure(figsize=(15, 10))
 
-# 1. Predicted vs Actual Values Scatter Plot
+# 1. Predicted vs Actual Values Scatter Plot with density coloring
 plt.subplot(2, 2, 1)
-plt.scatter(y_test, y_pred, alpha=0.5)
-plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+density = plt.hist2d(y_test, y_pred, 
+                    bins=50,
+                    cmap='viridis',
+                    norm=plt.matplotlib.colors.LogNorm())  # Using log normalization for better color distribution
+plt.colorbar(density[3], label='Count of points')
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 
+         'r--', lw=2, label='Perfect Prediction')
 plt.xlabel('Actual Price')
 plt.ylabel('Predicted Price')
-plt.title('Predicted vs Actual Values')
-plt.grid(True)
+plt.title('Predicted vs Actual Values\nColor indicates density of points')
+plt.grid(True, alpha=0.3)
+plt.legend()
 
 # 2. Residuals Plot
 plt.subplot(2, 2, 2)
