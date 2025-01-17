@@ -7,9 +7,6 @@ from collections import defaultdict
 file_path = './dataset/Clean_Dataset.csv'
 df = pd.read_csv(file_path)
 
-# Use only the first 1000 rows
-df = df.head(10000)
-
 # Drop irrelevant columns
 df = df.drop('Unnamed: 0', axis=1)
 df = df.drop('flight', axis=1)

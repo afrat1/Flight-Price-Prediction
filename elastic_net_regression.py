@@ -55,9 +55,18 @@ def mean_squared_error(y_true, y_pred):
     """Custom implementation of MSE"""
     return np.mean((y_true - y_pred) ** 2)
 
-class CustomLassoRegression:
-    def __init__(self, alpha=1.0, max_iter=1000, tol=1e-4, learning_rate=0.01):
+class CustomElasticNetRegression:
+    def __init__(self, alpha=1.0, l1_ratio=0.5, max_iter=1000, tol=1e-4, learning_rate=0.01):
+        """
+        Initialize Elastic Net Regression
+        
+        Parameters:
+        alpha: float, regularization strength
+        l1_ratio: float, mixing parameter (0 <= l1_ratio <= 1)
+                 l1_ratio = 1 is Lasso, l1_ratio = 0 is Ridge
+        """
         self.alpha = alpha
+        self.l1_ratio = l1_ratio
         self.max_iter = max_iter
         self.tol = tol
         self.learning_rate = learning_rate
@@ -80,13 +89,15 @@ class CustomLassoRegression:
             # Predictions
             y_pred = np.dot(X, self.coef_)
             
-            # Compute gradients (with L1 regularization)
+            # Compute gradients
             gradients = (-2/n_samples) * np.dot(X.T, (y - y_pred))
             
-            # Add L1 regularization term (except for intercept)
+            # Add L1 and L2 regularization terms (except for intercept)
             l1_grad = np.zeros(n_features)
-            l1_grad[1:] = self.alpha * np.sign(self.coef_[1:])
-            gradients += l1_grad
+            l2_grad = np.zeros(n_features)
+            l1_grad[1:] = self.alpha * self.l1_ratio * np.sign(self.coef_[1:])
+            l2_grad[1:] = self.alpha * (1 - self.l1_ratio) * 2 * self.coef_[1:]
+            gradients += l1_grad + l2_grad
             
             # Update weights with current learning rate
             new_coef = self.coef_ - learning_rate * gradients
@@ -119,8 +130,9 @@ class CustomLassoRegression:
     def _compute_loss(self, X, y):
         y_pred = np.dot(X, self.coef_)
         mse = np.mean((y - y_pred) ** 2)
-        l1_penalty = self.alpha * np.sum(np.abs(self.coef_[1:]))  # L1 penalty (excluding intercept)
-        return mse + l1_penalty
+        l1_penalty = self.alpha * self.l1_ratio * np.sum(np.abs(self.coef_[1:]))
+        l2_penalty = self.alpha * (1 - self.l1_ratio) * np.sum(self.coef_[1:] ** 2)
+        return mse + l1_penalty + l2_penalty
 
 # Data loading and preprocessing
 file_path = './dataset/Clean_Dataset.csv'
@@ -159,58 +171,86 @@ scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
-# Test different alpha values
-alphas = [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
+# Test different combinations of alpha and l1_ratio
+alphas = [0.0001, 0.001, 0.01, 0.1, 1.0]
+l1_ratios = [0.1, 0.3, 0.5, 0.7, 0.9]
 results = []
 
 for alpha in alphas:
-    model = CustomLassoRegression(alpha=alpha)
-    model.fit(X_train, y_train)
-    
-    y_train_pred = model.predict(X_train)
-    y_test_pred = model.predict(X_test)
-    
-    train_r2 = r2_score(y_train, y_train_pred)
-    test_r2 = r2_score(y_test, y_test_pred)
-    
-    results.append({
-        'alpha': alpha,
-        'train_r2': train_r2,
-        'test_r2': test_r2,
-        'coefficient_sum': np.sum(np.abs(model.coef_))  # Sum of absolute coefficients
-    })
-    
-    print(f"\nAlpha: {alpha}")
-    print(f"Train R2: {train_r2:.4f}")
-    print(f"Test R2: {test_r2:.4f}")
-    print(f"Total Coefficient Magnitude: {np.sum(np.abs(model.coef_)):.4f}")
+    for l1_ratio in l1_ratios:
+        model = CustomElasticNetRegression(alpha=alpha, l1_ratio=l1_ratio)
+        model.fit(X_train, y_train)
+        
+        y_train_pred = model.predict(X_train)
+        y_test_pred = model.predict(X_test)
+        
+        train_r2 = r2_score(y_train, y_train_pred)
+        test_r2 = r2_score(y_test, y_test_pred)
+        
+        results.append({
+            'alpha': alpha,
+            'l1_ratio': l1_ratio,
+            'train_r2': train_r2,
+            'test_r2': test_r2,
+            'coefficient_sum': np.sum(np.abs(model.coef_))
+        })
+        
+        print(f"\nAlpha: {alpha}, L1 Ratio: {l1_ratio}")
+        print(f"Train R2: {train_r2:.4f}")
+        print(f"Test R2: {test_r2:.4f}")
+        print(f"Total Coefficient Magnitude: {np.sum(np.abs(model.coef_)):.4f}")
 
-# Find best alpha
+# Find best parameters
 best_result = max(results, key=lambda x: x['test_r2'])
-print(f"\nBest alpha: {best_result['alpha']}")
+print(f"\nBest parameters:")
+print(f"Alpha: {best_result['alpha']}")
+print(f"L1 Ratio: {best_result['l1_ratio']}")
 print(f"Best Test R2: {best_result['test_r2']:.4f}")
 
 # Visualization
 try:
     import matplotlib.pyplot as plt
     
-    plt.figure(figsize=(12, 5))
+    plt.figure(figsize=(15, 5))
     
-    plt.subplot(1, 2, 1)
-    plt.semilogx([r['alpha'] for r in results], 
-                 [r['train_r2'] for r in results], 'b.-', label='Train R2')
-    plt.semilogx([r['alpha'] for r in results], 
-                 [r['test_r2'] for r in results], 'r.-', label='Test R2')
+    # Plot R2 scores for different alphas and l1_ratios
+    plt.subplot(1, 3, 1)
+    for l1_ratio in l1_ratios:
+        current_results = [r for r in results if r['l1_ratio'] == l1_ratio]
+        plt.semilogx([r['alpha'] for r in current_results],
+                     [r['test_r2'] for r in current_results],
+                     '.-', label=f'L1 ratio = {l1_ratio}')
     plt.xlabel('Alpha (log scale)')
-    plt.ylabel('R2 Score')
+    plt.ylabel('Test R2 Score')
     plt.legend()
     plt.grid(True)
     
-    plt.subplot(1, 2, 2)
-    plt.semilogx([r['alpha'] for r in results], 
-                 [r['coefficient_sum'] for r in results], 'g.-')
+    # Plot coefficient magnitudes
+    plt.subplot(1, 3, 2)
+    for l1_ratio in l1_ratios:
+        current_results = [r for r in results if r['l1_ratio'] == l1_ratio]
+        plt.semilogx([r['alpha'] for r in current_results],
+                     [r['coefficient_sum'] for r in current_results],
+                     '.-', label=f'L1 ratio = {l1_ratio}')
     plt.xlabel('Alpha (log scale)')
     plt.ylabel('Total Coefficient Magnitude')
+    plt.legend()
+    plt.grid(True)
+    
+    # Plot train vs test R2
+    plt.subplot(1, 3, 3)
+    best_l1_ratio = best_result['l1_ratio']
+    best_results = [r for r in results if r['l1_ratio'] == best_l1_ratio]
+    plt.semilogx([r['alpha'] for r in best_results],
+                 [r['train_r2'] for r in best_results],
+                 'b.-', label='Train R2')
+    plt.semilogx([r['alpha'] for r in best_results],
+                 [r['test_r2'] for r in best_results],
+                 'r.-', label='Test R2')
+    plt.xlabel('Alpha (log scale)')
+    plt.ylabel('R2 Score')
+    plt.title(f'Best L1 Ratio: {best_l1_ratio}')
+    plt.legend()
     plt.grid(True)
     
     plt.tight_layout()

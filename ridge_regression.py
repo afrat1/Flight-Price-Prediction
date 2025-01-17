@@ -55,7 +55,7 @@ def mean_squared_error(y_true, y_pred):
     """Custom implementation of MSE"""
     return np.mean((y_true - y_pred) ** 2)
 
-class CustomLassoRegression:
+class CustomRidgeRegression:
     def __init__(self, alpha=1.0, max_iter=1000, tol=1e-4, learning_rate=0.01):
         self.alpha = alpha
         self.max_iter = max_iter
@@ -63,7 +63,7 @@ class CustomLassoRegression:
         self.learning_rate = learning_rate
         self.coef_ = None
         self.intercept_ = None
-    
+        
     def fit(self, X, y):
         # Add bias term
         X = np.c_[np.ones((X.shape[0], 1)), X]
@@ -80,13 +80,10 @@ class CustomLassoRegression:
             # Predictions
             y_pred = np.dot(X, self.coef_)
             
-            # Compute gradients (with L1 regularization)
-            gradients = (-2/n_samples) * np.dot(X.T, (y - y_pred))
-            
-            # Add L1 regularization term (except for intercept)
-            l1_grad = np.zeros(n_features)
-            l1_grad[1:] = self.alpha * np.sign(self.coef_[1:])
-            gradients += l1_grad
+            # Compute gradients (with regularization)
+            gradients = (-2/n_samples) * np.dot(X.T, (y - y_pred)) + \
+                       (2 * self.alpha * self.coef_)
+            gradients[0] -= 2 * self.alpha * self.coef_[0]  # Don't regularize intercept
             
             # Update weights with current learning rate
             new_coef = self.coef_ - learning_rate * gradients
@@ -119,10 +116,9 @@ class CustomLassoRegression:
     def _compute_loss(self, X, y):
         y_pred = np.dot(X, self.coef_)
         mse = np.mean((y - y_pred) ** 2)
-        l1_penalty = self.alpha * np.sum(np.abs(self.coef_[1:]))  # L1 penalty (excluding intercept)
-        return mse + l1_penalty
+        regularization = self.alpha * np.sum(self.coef_[1:] ** 2)  # Don't regularize intercept
+        return mse + regularization
 
-# Data loading and preprocessing
 file_path = './dataset/Clean_Dataset.csv'
 
 df = pd.read_csv(file_path)
@@ -159,12 +155,12 @@ scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
-# Test different alpha values
+# Daha anlaşılır alpha değerleri
 alphas = [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
 results = []
 
 for alpha in alphas:
-    model = CustomLassoRegression(alpha=alpha)
+    model = CustomRidgeRegression(alpha=alpha)
     model.fit(X_train, y_train)
     
     y_train_pred = model.predict(X_train)
@@ -177,20 +173,20 @@ for alpha in alphas:
         'alpha': alpha,
         'train_r2': train_r2,
         'test_r2': test_r2,
-        'coefficient_sum': np.sum(np.abs(model.coef_))  # Sum of absolute coefficients
+        'coefficient_sum': np.sum(np.abs(model.coef_))  # katsayıların toplamı
     })
     
     print(f"\nAlpha: {alpha}")
     print(f"Train R2: {train_r2:.4f}")
     print(f"Test R2: {test_r2:.4f}")
-    print(f"Total Coefficient Magnitude: {np.sum(np.abs(model.coef_)):.4f}")
+    print(f"Toplam Katsayı Büyüklüğü: {np.sum(np.abs(model.coef_)):.4f}")
 
-# Find best alpha
+# En iyi sonucu veren alpha değerini bul
 best_result = max(results, key=lambda x: x['test_r2'])
-print(f"\nBest alpha: {best_result['alpha']}")
-print(f"Best Test R2: {best_result['test_r2']:.4f}")
+print(f"\nEn iyi alpha: {best_result['alpha']}")
+print(f"En iyi Test R2: {best_result['test_r2']:.4f}")
 
-# Visualization
+# Görselleştirme
 try:
     import matplotlib.pyplot as plt
     
@@ -210,10 +206,10 @@ try:
     plt.semilogx([r['alpha'] for r in results], 
                  [r['coefficient_sum'] for r in results], 'g.-')
     plt.xlabel('Alpha (log scale)')
-    plt.ylabel('Total Coefficient Magnitude')
+    plt.ylabel('Toplam Katsayı Büyüklüğü')
     plt.grid(True)
     
     plt.tight_layout()
     plt.show()
 except ImportError:
-    print("Matplotlib is not installed. Could not create visualization.") 
+    print("Matplotlib yüklü değil. Grafik oluşturulamadı.")
