@@ -6,3 +6,5 @@
 
 # Ignore Anaconda projects
 anaconda_projects/
+
+venv/
